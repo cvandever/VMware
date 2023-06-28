@@ -114,7 +114,7 @@ $columns = ('Name', 'PowerState', 'GuestOS', 'HostName','ResourcePool',
     'Datastore', 'vCPUs', 'MemorySize', 'ProvisionedStorage', 'PercentUsed',
     'IPAddress', 'PortGroup', 'NetworkAdapter', 'AdapterType', 'MacAddress',
     'SnapshotName', 'SnapshotCreated', 'SnapshotSize', 'VMToolsVersion',
-    'VMOwner', 'VMOwnerTeam', 'VMExpiration')
+    'VMOwner', 'VMOwnerTeam', 'VMCreation', 'VMExpiration')
 
     $exportData = foreach ($vm in $allVMs) {
         $networkInfo = $vm | Get-VMNetworkInfo
@@ -140,9 +140,10 @@ $columns = ('Name', 'PowerState', 'GuestOS', 'HostName','ResourcePool',
         SnapshotCreated = $snapshotInfo.SnapshotCreated
         SnapshotSize = $snapshotInfo.SnapshotSize
         VMToolsVersion = $vm.Guest.ToolsVersion
-        VMOwner = $vm.CustomFields["VM Owner"] -join ', '
-        VMOwnerTeam = $vm.CustomFields["VM Owner Team"] -join ', '
-        VMExpiration = $vm.CustomFields["VM Expiration"] -join ', '
+        VMOwner = $vm.CustomFields["VM Owner"]
+        VMOwnerTeam = $vm.CustomFields["Owner's Team"]
+        VMCreation = $vm.CustomFields["Creation Date"]
+        VMExpiration = $vm.CustomFields["Expiration Date"]
     }
 }
     

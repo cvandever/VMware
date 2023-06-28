@@ -24,79 +24,114 @@ function Get-SaveFileDialog {
     $dialogResult = $fileDialog.ShowDialog()
 
     # Check if the user clicked the OK button
-    if ($dialogResult -eq 'OK') {
-        return $fileDialog.FileName
+    if ($fileDialog.FileName) {
+        if ($dialogResult -eq 'OK') {
+            return $fileDialog.FileName
+        }
+        return $null
     }
-    return $null
 }
 
+function Get-VMNetworkInfo {
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
+        $VM
+    )
+
+    process {
+        $networkAdapter = $VM | Get-NetworkAdapter
+        $portgroup = $networkAdapter.NetworkName -join ', '
+        $macAddress = $networkAdapter.MacAddress -join ', '
+        $adapterType = $networkAdapter.Type -join ', '
+
+        [PSCustomObject]@{
+            PortGroup = $portgroup
+            NetworkAdapter = $networkAdapter.NetworkName
+            AdapterType = $adapterType
+            MacAddress = $macAddress
+        }
+    }
+}
+
+function Get-VMSnapshotInfo {
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
+        $VM
+    )
+
+    process {
+        $snapshots = $VM | Get-Snapshot
+
+        if ($snapshots) {
+            $snapshotNames = $snapshots.Name -join ', '
+            $snapshotCreated = $snapshots.Created.Date -join ', '
+            $snapshotSize = "{0:N2}" -f ($snapshots.SizeGB -join ', ')
+
+            [PSCustomObject]@{
+                SnapshotName = $snapshotNames
+                SnapshotCreated = $snapshotCreated
+                SnapshotSize = $snapshotSize
+            }
+        } else {
+            [PSCustomObject]@{
+                SnapshotName = $null
+                SnapshotCreated = $null
+                SnapshotSize = $null
+            }
+        }
+    }
+}
+
+# Retrieve Vsphere credentials and servername from user input
+# Open File Dialog to select location to save report
+$creds = Get-Credential 
 $ServerName = Get-ServerName
 $Path = Get-SaveFileDialog
 
-$cred = Get-Credential | Connect-VIServer -Server $ServerName  -Username $cred.Username -Password $cred.Password
+Connect-VIServer -Server $ServerName  -Credential $creds
 
 $allVMs = Get-VM
-$columns = ('Name', 'PowerState', 'GuestOS', 'HostName',
-    'ResourcePool', 'Datastore', 'vCPUs', 'MemorySize', 
-    'ProvisionedStorage', 'PercentUsed', 'IPAddress', 'PortGroup', 
-    'NetworkAdapter', 'AdapterType', 'MacAddress', 'SnapshotName', 
-    'SnapshotCreated', 'SnapshotSize', 'VMToolsVersion')
 
-foreach ($vm in $allVMs) {
-    $networkAdapter = $vm | Get-NetworkAdapter
-    $portgroup = $networkAdapter.NetworkName
-    $portgroup = $portgroup -join ', ' # If there are multiple portgroups, join them with a comma
-    $macAddress = $networkAdapter.MacAddress -join ', ' # If there are multiple MAC addresses, join them with a comma
-    $adapterType = $networkAdapter.Type -join ', ' # If there are multiple adapter types, join them with a comma    
-    $datastore = ($vm | Get-Datastore).Name -join ', ' # If there are multiple datastores, join them with a comma
-    $snapshot = $vm | Get-Snapshot -ErrorAction SilentlyContinue
-    $snapshotName = $null
-    $snapshotCreated = $null
-    $snapshotSize = $null
-    if ($snapshot.Count -gt 1) {
-        if ($snapshot.Name) {
-            $snapshotName = $snapshot.Name -join ', '
-        }
-        if ($snapshot.Created) {
-            $snapshotCreated = $snapshot.Created -join ', '
-        }
-        $snapshotSize = "{0:N2}" -f $snapshot.SizeGB -join ', '
-    }
-    elseif ($snapshot.Count -eq 1) {
-        $snapshotName = $snapshot.Name
-        $snapshotCreated = $snapshot.Created
-        $snapshotSize = "{0:N2}" -f $snapshot.SizeGB
-    }
-    else {
-        $snapshotName = $null
-        $snapshotCreated = $null
-        $snapshotSize = $null
-    }
+# If you add more columns, make sure to add them to the $columns variable below
+# Creates ordered hashtable with column names and values. In order left to right
+$columns = ('Name', 'PowerState', 'GuestOS', 'HostName','ResourcePool',
+    'Datastore', 'vCPUs', 'MemorySize', 'ProvisionedStorage', 'PercentUsed',
+    'IPAddress', 'PortGroup', 'NetworkAdapter', 'AdapterType', 'MacAddress',
+    'SnapshotName', 'SnapshotCreated', 'SnapshotSize', 'VMToolsVersion',
+    'VMOwner', 'VMOwnerTeam', 'VMExpiration')
 
-    $vmInfo = @{
-        'Name' = $vm.Name
-        'PowerState' = $vm.PowerState
-        'GuestOS' = $vm.Guest.OSFullName
-        'HostName' = $vm.VMHost.Name
-        'ResourcePool' = $vm.ResourcePool.Name
-        'Datastore' = $datastore
-        'vCPUs' = $vm.NumCpu
-        'MemorySize' = $vm.MemoryGB
-        'ProvisionedStorage' = "{0:N2}" -f $vm.ProvisionedSpaceGB
-        'PercentUsed' = "{0:N2}" -f ($vm.UsedSpaceGB / $vm.ProvisionedSpaceGB * 100)
-        'IPAddress' = $vm.Guest.IPAddress -join ', '
-        'PortGroup' = $portgroup
-        'NetworkAdapter' = $networkAdapter.NetworkName -join ', '
-        'AdapterType' = $adapterType
-        'MacAddress' = $macAddress
-        'SnapshotName' = $snapshotName
-        'SnapshotCreated' = $snapshotCreated
-        'SnapshotSize' = $snapshotSize
-        'VMToolsVersion' = $vm.Guest.ToolsVersion
-    }
+    $exportData = foreach ($vm in $allVMs) {
+        $networkInfo = $vm | Get-VMNetworkInfo
+        $snapshotInfo = $vm | Get-VMSnapshotInfo
     
-
-    $vmInfoObject = New-Object -TypeName PSObject -Property $vmInfo
-    $selectedProperties = $vmInfoObject | Select-Object -Property $columns
-    $selectedProperties | Export-Csv -Path $Path -Append -NoTypeInformation
+    [PSCustomObject]@{
+        Name = $vm.Name
+        PowerState = $vm.PowerState
+        GuestOS = $vm.Guest.OSFullName
+        HostName = $vm.VMHost.Name
+        ResourcePool = $vm.ResourcePool.Name
+        Datastore = ($vm | Get-Datastore).Name -join ', '
+        vCPUs = $vm.NumCpu
+        MemorySize = $vm.MemoryGB
+        ProvisionedStorage = "{0:N2}" -f $vm.ProvisionedSpaceGB
+        PercentUsed = "{0:N2}" -f ($vm.UsedSpaceGB / $vm.ProvisionedSpaceGB * 100)
+        IPAddress = $vm.Guest.IPAddress -join ', '
+        PortGroup = $networkInfo.PortGroup
+        NetworkAdapter = $networkInfo.NetworkAdapter
+        AdapterType = $networkInfo.AdapterType
+        MacAddress = $networkInfo.MacAddress
+        SnapshotName = $snapshotInfo.SnapshotName
+        SnapshotCreated = $snapshotInfo.SnapshotCreated
+        SnapshotSize = $snapshotInfo.SnapshotSize
+        VMToolsVersion = $vm.Guest.ToolsVersion
+        VMOwner = $vm.CustomFields["VM Owner"] -join ', '
+        VMOwnerTeam = $vm.CustomFields["VM Owner Team"] -join ', '
+        VMExpiration = $vm.CustomFields["VM Expiration"] -join ', '
+    }
 }
+    
+Disconnect-VIServer -Server $ServerName -Confirm:$false
+
+$selectedProperties = $exportData | Select-Object -Property $columns
+$selectedProperties | Export-Csv -Path $Path -NoTypeInformation -Append
+

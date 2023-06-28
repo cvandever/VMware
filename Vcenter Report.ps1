@@ -36,7 +36,11 @@ $Path = Get-SaveFileDialog
 $cred = Get-Credential | Connect-VIServer -Server $ServerName  -Username $cred.Username -Password $cred.Password
 
 $allVMs = Get-VM
-$columns = 'Name', 'PowerState', 'GuestOS', 'HostName', 'ResourcePool', 'Datastore', 'vCPUs', 'MemorySize', 'ProvisionedStorage', 'PercentUsed', 'IPAddress', 'PortGroup', 'NetworkAdapter', 'AdapterType', 'MacAddress', 'SnapshotName', 'SnapshotCreated', 'VMToolsVersion'
+$columns = ('Name', 'PowerState', 'GuestOS', 'HostName',
+    'ResourcePool', 'Datastore', 'vCPUs', 'MemorySize', 
+    'ProvisionedStorage', 'PercentUsed', 'IPAddress', 'PortGroup', 
+    'NetworkAdapter', 'AdapterType', 'MacAddress', 'SnapshotName', 
+    'SnapshotCreated', 'SnapshotSize', 'VMToolsVersion')
 
 foreach ($vm in $allVMs) {
     $networkAdapter = $vm | Get-NetworkAdapter
@@ -48,9 +52,25 @@ foreach ($vm in $allVMs) {
     $snapshot = $vm | Get-Snapshot -ErrorAction SilentlyContinue
     $snapshotName = $null
     $snapshotCreated = $null
-    if ($snapshot) {
+    $snapshotSize = $null
+    if ($snapshot.Count -gt 1) {
+        if ($snapshot.Name) {
+            $snapshotName = $snapshot.Name -join ', '
+        }
+        if ($snapshot.Created) {
+            $snapshotCreated = $snapshot.Created -join ', '
+        }
+        $snapshotSize = "{0:N2}" -f $snapshot.SizeGB -join ', '
+    }
+    elseif ($snapshot.Count -eq 1) {
         $snapshotName = $snapshot.Name
         $snapshotCreated = $snapshot.Created
+        $snapshotSize = "{0:N2}" -f $snapshot.SizeGB
+    }
+    else {
+        $snapshotName = $null
+        $snapshotCreated = $null
+        $snapshotSize = $null
     }
 
     $vmInfo = @{
@@ -62,8 +82,8 @@ foreach ($vm in $allVMs) {
         'Datastore' = $datastore
         'vCPUs' = $vm.NumCpu
         'MemorySize' = $vm.MemoryGB
-        'ProvisionedStorage' = [Math]::Round($vm.ProvisionedSpaceGB,0)
-        'PercentUsed' = [Math]::Round(($vm.UsedSpaceGB / $vm.ProvisionedSpaceGB * 100),0)
+        'ProvisionedStorage' = "{0:N2}" -f $vm.ProvisionedSpaceGB
+        'PercentUsed' = "{0:N2}" -f ($vm.UsedSpaceGB / $vm.ProvisionedSpaceGB * 100)
         'IPAddress' = $vm.Guest.IPAddress -join ', '
         'PortGroup' = $portgroup
         'NetworkAdapter' = $networkAdapter.NetworkName -join ', '
@@ -71,6 +91,7 @@ foreach ($vm in $allVMs) {
         'MacAddress' = $macAddress
         'SnapshotName' = $snapshotName
         'SnapshotCreated' = $snapshotCreated
+        'SnapshotSize' = $snapshotSize
         'VMToolsVersion' = $vm.Guest.ToolsVersion
     }
     

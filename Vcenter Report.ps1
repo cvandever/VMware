@@ -13,24 +13,40 @@ function Get-ServerName {
 }
 
 function Get-SaveFileDialog {
+    param (
+        [string]$ServerName,
+        [string]$DefaultFolder = 'C:\Reports'
+    )
+
     Add-Type -AssemblyName System.Windows.Forms
+
+    # Get the current date and time
+    $currentDateTime = Get-Date -Format 'MMddyy_HHmm'
+
+    # Get the current working directory
+    $defaultFolder = (Get-Item -Path ".\").FullName
+
+    # Create the default filename using the server name and current date/time
+    $defaultFileName = "$ServerName" + "_$currentDateTime.csv"
 
     # Create an instance of the SaveFileDialog
     $fileDialog = New-Object System.Windows.Forms.SaveFileDialog
     $fileDialog.Filter = 'CSV Files (*.csv)|*.csv'
     $fileDialog.Title = 'Save CSV File'
+    $fileDialog.InitialDirectory = $DefaultFolder
+    $fileDialog.FileName = $defaultFileName
 
     # Show the file dialog and wait for user input
     $dialogResult = $fileDialog.ShowDialog()
 
     # Check if the user clicked the OK button
-    if ($fileDialog.FileName) {
-        if ($dialogResult -eq 'OK') {
-            return $fileDialog.FileName
-        }
-        return $null
+    
+    if ($dialogResult -eq 'OK') {
+        return $fileDialog.FileName
     }
+    return $null
 }
+
 
 function Get-VMNetworkInfo {
     param (
@@ -86,7 +102,7 @@ function Get-VMSnapshotInfo {
 # Open File Dialog to select location to save report
 $creds = Get-Credential 
 $ServerName = Get-ServerName
-$Path = Get-SaveFileDialog
+$Path = Get-SaveFileDialog -ServerName $ServerName
 
 Connect-VIServer -Server $ServerName  -Credential $creds
 
@@ -131,6 +147,8 @@ $columns = ('Name', 'PowerState', 'GuestOS', 'HostName','ResourcePool',
 }
     
 Disconnect-VIServer -Server $ServerName -Confirm:$false
+Write-Host "Disconnected from $ServerName"
+Write-Host "Exporting data to $Path"
 
 $selectedProperties = $exportData | Select-Object -Property $columns
 $selectedProperties | Export-Csv -Path $Path -NoTypeInformation -Append

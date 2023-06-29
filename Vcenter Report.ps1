@@ -142,7 +142,7 @@ $columnsSnapshotInfo = ('Name', 'SnapshotName', 'SnapshotCreated', 'CumulativeSn
 foreach ($vm in $allVMs) {
     $networkInfo = $vm | Get-VMNetworkInfo
     $snapshotInfo = $vm | Get-VMSnapshotInfo
-    #$users = Get-VMEventUsers -VM $vm
+    $users = Get-VMEventUsers -VM $vm
     
     $generalInfoData = [PSCustomObject]@{
         Name = $vm.Name
@@ -160,7 +160,7 @@ foreach ($vm in $allVMs) {
         VMOwnerTeam = $vm.CustomFields["Owner's Team"]
         VMCreation = $vm.CustomFields["Creation Date"]
         VMExpiration = $vm.CustomFields["Expiration Date"]
-        #RecentUsers = $users
+        RecentUsers = $users
     }
     $networkInfoData = [PSCustomObject]@{
         Name = $vm.Name

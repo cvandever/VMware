@@ -4,7 +4,6 @@ import requests
 import pandas as pd
 from datetime import datetime
 from PyQt5.QtWidgets import QApplication, QFileDialog, QMessageBox
-from openpyxl.utils import get_column_letter
 import os, csv
 
 base_url = "https://apigtwb2c.us.dell.com"

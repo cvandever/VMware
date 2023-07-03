@@ -10,8 +10,8 @@ base_url = "https://apigtwb2c.us.dell.com"
 
 def get_token():
     token_url = f"{base_url}/auth/oauth/v2/token"
-    client_id = os.environ.get("DELL_API_KEY")
-    client_secret = os.environ.get("DELL_API_SECRET")
+    client_id = os.environ.get("DELL_WARRANTY_ID")
+    client_secret = os.environ.get("DELL_WARRANTY_SECRET")
     payload = {
         "grant_type": "client_credentials",
         "client_id": client_id,
@@ -56,7 +56,7 @@ def get_device_details(service_tag: str):
 
 
 # Process the info to create Custom Json
-def process_warranty_info(service_tags: list, customer_name: str):
+def process_warranty_info(service_tags: list, customer_name: str, base_path: str):
     details_info =[get_device_details(service_tag) for service_tag in service_tags]
     devices = []
     for device in details_info:
@@ -81,10 +81,10 @@ def process_warranty_info(service_tags: list, customer_name: str):
             "Entitlements": device_entitlements,
             "Components": device_components
         })
-    return export_to_excel(devices, customer_name)
+    return export_to_excel(devices, customer_name, base_path)
 
 
-def export_to_excel(devices: list,customer_name: str):
+def export_to_excel(devices: list,customer_name: str, base_path: str):
     datetime_now = datetime.now().strftime("%Y-%m-%d")
     # Create Entitlements dataframe
     warranty_df = pd.json_normalize(devices).explode('Entitlements').drop('Components', axis=1)
@@ -115,7 +115,7 @@ def export_to_excel(devices: list,customer_name: str):
 
     # Create the Excel writer
     # prompt the user for the customer name and create the output file name
-    output_file = f'{customer_name}_ServiceTags_{datetime_now}.xlsx'
+    output_file = f'{base_path}/{customer_name}_ServiceTags_{datetime_now}.xlsx'
     writer = pd.ExcelWriter(output_file, engine='xlsxwriter')
     warranty_df.to_excel(writer, index=False, sheet_name='Warranty Info')
     component_df.to_excel(writer, index=False, sheet_name='Component Info')
@@ -165,7 +165,7 @@ def main():
         customer_name = input("Enter the customer name: ")
         service_tags = get_csv_values(csv_file)
         base_path = os.path.dirname(csv_file)
-        outfile = process_warranty_info(service_tags, customer_name)
+        outfile = process_warranty_info(service_tags, customer_name, base_path)
         print(f"Writing Data to {base_path}/{outfile}")
     
 

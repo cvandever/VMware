@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import os, base64, json
 from jinja2 import Template
 
-base_url = "https://apis.druva.com"
+base_url = "https://apis-us0.druva.com"
 
 def get_valid_integer_input(prompt, default_value, max_attempts):
     for attempt in range(1, max_attempts + 1):
@@ -33,7 +33,7 @@ def generate_base64_credentials(client_id, client_secret):
     return base64_credentials
 
 def get_token():
-    token_url = f"https://apis.druva.com/token"
+    token_url = f"{base_url}/token"
     client_id = os.environ.get("DRUVA_CLIENT_ID")
     client_secret = os.environ.get("DRUVA_CLIENT_SECRET")
     payload = {

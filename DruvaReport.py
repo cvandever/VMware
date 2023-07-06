@@ -3,11 +3,23 @@
 import requests
 import pandas as pd
 from datetime import datetime, timedelta
-import os, csv, base64, json
-from pprint import pprint
+import os, base64, json
 from jinja2 import Template
 
-base_url = "https://apis-us0.druva.com"
+base_url = "https://apis.druva.com"
+
+def get_valid_integer_input(prompt, default_value, max_attempts):
+    for attempt in range(1, max_attempts + 1):
+        user_input = input(f"{prompt} (default is {default_value}). Attempt {attempt}: ")
+        
+        try:
+            value = int(user_input)
+            return value
+        except ValueError:
+            print("Invalid input. Only integer values are allowed.")
+    
+    print(f"Exceeded the maximum number of attempts. Using the default value of {default_value}.")
+    return default_value
 
 
 def generate_base64_credentials(client_id, client_secret):
@@ -21,7 +33,7 @@ def generate_base64_credentials(client_id, client_secret):
     return base64_credentials
 
 def get_token():
-    token_url = f"https://apis-us0.druva.com/token"
+    token_url = f"https://apis.druva.com/token"
     client_id = os.environ.get("DRUVA_CLIENT_ID")
     client_secret = os.environ.get("DRUVA_CLIENT_SECRET")
     payload = {
@@ -45,16 +57,6 @@ def get_token():
     return token_headers
 
 headers = get_token()
-
-def get_all_reports():
-    report_url = f"{base_url}/platform/reportsvc/v1/reports"
-    response = requests.get(report_url, headers=headers)
-    if response.status_code == 200:
-        report_info = response.json()
-    else:
-        print("Report info request failed. Status code:", response.status_code)
-        report_info = []
-    return report_info
 
 def get_backup_activity(date_str: str, page_token: str = None):
     url = f"{base_url}/platform/reportsvc/v1/reports/ewBackupActivity"
@@ -91,35 +93,53 @@ def readable_datetime(date_str: str):
     return readable_date
 
 
-def get_seven_days_prior():
+def get_seven_days_prior(delta: int = 7):
     current_datetime = datetime.utcnow()
-    prior_datetime = current_datetime - timedelta(days=7)
+    # Subtract 7 days from the current date and time to get the date 7 days ago in UTC
+    prior_datetime = current_datetime - timedelta(days=delta)
     formatted_datetime = prior_datetime.isoformat() + "Z"
     return formatted_datetime
 
-def get_backup_activity_report():
+
+def get_backup_activity_report(date_str: str = get_seven_days_prior()):
     backup_list = []
-    backup_data = get_backup_activity(get_seven_days_prior())
+    backup_data = get_backup_activity(date_str)
     for backup in backup_data["data"]:
-        backup["lastUpdatedTime"] = readable_datetime(backup["lastUpdatedTime"])
         backup["started"] = readable_datetime(backup["started"])
         backup["ended"] = readable_datetime(backup["ended"])
-        backup = {key: backup[key] for key in backup if key not in ["backupContent", "backupMethod", "backupMountName", "backupSet", "deviceName", "resourceType", "scanType", "scheduled"]}
+        backup = {key: backup[key] for key in backup if key not in ["backupContent", "backupMethod", "backupMountName", "backupSet", "deviceName", "resourceType", "scanType", "scheduled", "lastUpdatedTime"]}
         backup_list.append(backup)
     return backup_list
 
 def generate_report(data):
-    # Convert the data into a pandas DataFrame
-    df = pd.DataFrame(data)
+    columns = ["jobID","vm","status","started","ended","backupType","backupPolicy","workloads","organization","administrativeGroup","details"]
+    # Convert the data into a pandas DataFrame with the specified columns
+    df = pd.DataFrame(data, columns=columns)
+    df = df.sort_values(by="jobID", ascending=False)
 
-    # Render the DataFrame as an HTML table
-    html_table = df.to_html(index=False)
+    def apply_status_style(val):
+        if val == 'Successful':
+            return 'background-color: green;'
+        elif val == 'Failed':
+            return 'background-color: red;'
+        else:
+            return 'background-color: yellow;'
+        
+    # Apply the style to the DataFrame
+    df = df.style.applymap(apply_status_style, subset=pd.IndexSlice[:, ['status']])
+        
+    html_table = df.hide_index().set_table_styles([{'selector': 'td', 'props': [('border', '1px solid black')]}, {'selector': 'th', 'props': [('border', '1px solid black')]}]).render()
 
     # Define the HTML template for the report
     template_str = """
     <html>
     <head>
         <title>Backup Activity Report</title>
+        <style>
+        table {
+            border-collapse: collapse;
+        }
+        </style>
     </head>
     <body>
         <h1>Backup Activity Report</h1>
@@ -136,9 +156,12 @@ def generate_report(data):
 
     return html_report
 
+
 def main():
+    delta = get_valid_integer_input("Enter the number of days to include in the report", 7, 3)
+    date_str = get_seven_days_prior(delta)
     # Get the backup activity report
-    backup_activity = get_backup_activity_report()
+    backup_activity = get_backup_activity_report(date_str)
 
     # Generate the report
     report = generate_report(backup_activity)
@@ -149,9 +172,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
-
-
-        
-
-
